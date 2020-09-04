@@ -1,0 +1,130 @@
+using JuMP, CPLEX, LinearAlgebra, Plots
+
+#example problem
+
+A = [ -3 2 4 ; 3 1 -1; 1 -2 9]
+b = [9 ; 8 ; 10]
+c = [1 ; -2; 3]
+Asum = sum(A,dims=2)
+Asigns = sign.(A)
+# maximise c'x
+# while Ax<=b
+
+function simple()
+    simpleExample = Model(CPLEX.Optimizer)
+    @variable(simpleExample, x[1:3] >=0)
+
+    @objective(simpleExample, Max, c' * x)
+
+    @constraint(simpleExample, mainConstraint, A * x .<= b)
+
+
+    optimize!(simpleExample)
+
+    soluX = value.(x)
+end
+
+function orientationMIP()
+    simpleExample = Model(CPLEX.Optimizer)
+
+    @variable(simpleExample, x[1:3] >=0)
+
+    @variable(simpleExample, u[1:3], Bin)
+
+    @objective(simpleExample, Max, c' * x)
+
+    @constraint(simpleExample, mainConstraint, A * (x.-(1/2)+u) .<= b)
+
+    TT = stdout # save original STDOUT stream
+    redirect_stdout()
+
+    optimize!(simpleExample)
+
+    redirect_stdout(TT)
+
+    return value.(x), 2*(value.(u) .-1/2)
+end
+
+flotSol, orientation = orientationMIP()
+
+function transformHelp(i,j,u,lambda)
+    foo=digits(i, base=2, pad=3)
+    return foo[j]*orientation[j]*(sum(u)+lambda[1])-(orientation.*u)'*foo
+end
+
+function lazyUnit(size,i)
+    foo=zeros(size)
+    foo[i]=1
+    return foo
+end
+
+lambdaRange = 0.1:0.1:4
+
+optimalValues=zeros(length(lambdaRange))
+
+for (index,multiplyer) in enumerate(collect(lambdaRange))
+
+    lambda=ones(1)*multiplyer
+
+    actualTest = Model(CPLEX.Optimizer)
+
+
+
+    @variable(actualTest, x[1:3] >=0)
+
+    @variable(actualTest, u[1:3])
+
+    #@variable(actualTest, lambda[1] >=0)
+    @variable(actualTest, objMin[1:3])
+
+    @objective(actualTest, Max, c' * x)
+
+    @constraint(actualTest, orientationCon[i=1:3,j=1:3],
+    Asigns[i,j]*(u[j]*Asum[i]+lambda[1]*A[i,j])>=0
+    )
+
+    @constraint(actualTest, TransformConPos[i=1:(2^3-1),j=1:3],
+    transformHelp(i,j,u,lambda) <= lambda[1]*(sum(u)+lambda[1])
+    )
+
+    @constraint(actualTest, TransformConNeg[i=1:(2^3-1),j=1:3],
+    transformHelp(i,j,u,lambda) >= -lambda[1]*(sum(u)+lambda[1])
+    )
+
+    @constraint(actualTest, additionalCon,
+    sum(u)+lambda[1]>=0
+    )
+
+    @constraint(actualTest, mainCon[i=1:3],
+    A[i,:]'*x + (1/2)*A[i,:]'*(repeat(u,1,3)+I(3).*repeat(lambda,3,1))*Asigns[i,:]<=b[i]
+    )
+
+    @constraint(actualTest, objectiveConPos[i=1:3],
+    objMin[i] <= c[i]*x[i] + (1/2)*c'*(repeat(u,1,3)+I(3).*repeat(lambda,3,1))*I(3)[i,:]
+    )
+
+    @constraint(actualTest, objectiveConNeg[i=1:3],
+    objMin[i] <= c[i]*x[i] - (1/2)*c'*(repeat(u,1,3)+I(3).*repeat(lambda,3,1))*I(3)[i,:]
+    )
+
+    TT = stdout # save original STDOUT stream
+    redirect_stdout()
+
+    optimize!(actualTest)
+
+    redirect_stdout(TT)
+
+    if termination_status(actualTest) == MOI.OPTIMAL
+        optimalValues[index]=objective_value(actualTest)
+    else
+        optimalValues[index]=NaN
+    end
+    print(optimalValues[index])
+
+end
+
+
+plot(collect(lambdaRange),optimalValues)
+#return value.(x), 2*(value.(u) .-1/2)
+#xAnswer = value.(x)
+#uAnswer = value.(u)
