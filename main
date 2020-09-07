@@ -128,3 +128,5 @@ plot(collect(lambdaRange),optimalValues)
 #return value.(x), 2*(value.(u) .-1/2)
 #xAnswer = value.(x)
 #uAnswer = value.(u)
+
+#Iterators.product(1:3,fill(0:1,(1,3))...)
