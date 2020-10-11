@@ -1,0 +1,286 @@
+using JuMP, CPLEX, LinearAlgebra, Plots, ProgressMeter
+
+#example problem
+
+A = [ -3 2 4 ; 3 1 -1; 1 -2 9; -1 0 0; 0 -1 0; 0 0 -1]
+b = [9 ; 8 ; 10; 0; 0; 0]
+
+c = [10 ; -20; 30]
+#Asum = sum(A,dims=2) #row sum
+#Asigns = sign.(A) #
+
+function Vbounds(A,c)
+    n,m = size(A)
+
+    minV=-Inf*ones(m)
+    maxV=Inf*ones(m)
+
+    for row in eachrow(A)
+        if sum(row) !=0
+            rowSum = row/sum(row)
+            for index in eachindex(rowSum)
+                if rowSum[index] < 0
+                    if -rowSum[index] < maxV[index]
+                        maxV[index]=-rowSum[index]
+                    end
+                elseif rowSum[index] > 0
+                    if -rowSum[index] > minV[index]
+                        minV[index]=-rowSum[index]
+                    end
+                end
+            end
+        end
+    end
+
+    if sum(c) !=0
+        rowSum = c/sum(c)
+        for index in eachindex(rowSum)
+            if rowSum[index] < 0
+                if -rowSum[index] < maxV[index]
+                    maxV[index]=-rowSum[index]
+                end
+            elseif rowSum[index] > 0
+                if -rowSum[index] > minV[index]
+                    minV[index]=-rowSum[index]
+                end
+            end
+        end
+    end
+
+
+    return minV, maxV
+end
+
+
+minV, maxV = Vbounds(A,c)
+
+
+# maximise c'x
+# while Ax<=b
+
+function orientationMIP(A,b,c)
+    n,m = size(A)
+    simpleExample = Model(CPLEX.Optimizer)
+
+    @variable(simpleExample, x[1:m] )
+
+    @variable(simpleExample, u[1:m], Bin)
+
+    @objective(simpleExample, Max, c' * x)
+
+    @constraint(simpleExample, mainConstraint, A * (x.-(1/2)+u) .<= b)
+
+    TT = stdout # save original STDOUT stream
+    redirect_stdout()
+
+    optimize!(simpleExample)
+
+    redirect_stdout(TT)
+
+    return value.(x), 2*(value.(u) .-1/2)
+end
+
+flotSol, orientation = orientationMIP(A,b,c)
+
+
+#u=[1,1,1]
+function myMethod(A,b,c,minV,maxV,orientation,u)
+    n,m = size(A)
+    actualTest = Model(CPLEX.Optimizer)
+    BigM = 1000
+    @variable(actualTest, x[1:m])
+
+    @variable(actualTest, v[1:m])
+
+    @variable(actualTest, q[1:m] <=0)
+
+    @variable(actualTest, r[1:m] >=0)
+
+    @variable(actualTest, S[1:m], Bin)
+
+    @variable(actualTest, g[1:2])
+
+    @variable(actualTest, d[1:2])
+
+    #@objective(actualTest, Max, sum(c'*x))
+
+    @objective(actualTest, Max, c'*x-(1/2)*c'*((u .* v)' .+I(3).*u)*sign.(c))
+
+    @constraint(actualTest, vMin,
+        1+sum(v)>=0
+    )
+
+    @constraint(actualTest, MainCon[i=1:n],
+        A[i,:]'*x+(1/2)*A[i,:]'*((u .* v)' .+I(3).*u)*sign.(A[i,:]) <= b[i]
+    )
+
+    @constraint(actualTest, vBoundsUpper[j=1:m],
+        v[j]<=maxV[j]
+    )
+
+    @constraint(actualTest, vBoundsLower[j=1:m],
+        v[j]>=minV[j]
+    )
+
+    @constraint(actualTest, qBound[j=1:m],
+        q[j] <= orientation[j]*v[j]
+    )
+
+    @constraint(actualTest, rBound[j=1:m],
+        r[j] >= orientation[j]*v[j]
+    )
+
+    @constraint(actualTest, sBoundPos[j=1:m],
+        orientation[j]*v[j]<=BigM*S[j]
+    )
+
+    @constraint(actualTest, sBoundNeg[j=1:m],
+        orientation[j]*v[j]>=BigM*(S[j]-1)
+    )
+
+    @constraint(actualTest, g1[j=1:m],
+        g[1]>=-u[j]*(1+sum(v))+BigM*(S[j]-1)
+    )
+
+    @constraint(actualTest, g2[j=1:m],
+        g[1]>=(orientation[j]-u[j])*(1+sum(v))-BigM*S[j]
+    )
+
+    @constraint(actualTest, g3[j=1:m],
+        g[2]<=u[j]*(1+sum(v))+BigM*S[j]
+    )
+
+    @constraint(actualTest, g4[j=1:m],
+        g[2]<=(orientation[j]+u[j])*(1+sum(v))-BigM*(S[j]-1)
+    )
+
+    @constraint(actualTest, d1boundsLower,
+        d[1] >=0
+    )
+
+    @constraint(actualTest, d2boundsUpper,
+        d[2] <=0
+    )
+
+    @constraint(actualTest, d11[j=1:m],
+        d[1]>=orientation[j]*(1+sum(v))+orientation[j]*v[j]+BigM*(S[j]-1)
+    )
+
+    @constraint(actualTest, d12[j=1:m],
+        d[1]>=-orientation[j]*(1+sum(v))-orientation[j]*v[j]-BigM*S[j]
+    )
+
+    @constraint(actualTest, d21[j=1:m],
+        d[2]<=orientation[j]*(1+sum(v))+orientation[j]*v[j]+BigM*S[j]
+    )
+
+    @constraint(actualTest, d22[j=1:m],
+        d[2]<=-orientation[j]*(1+sum(v))-orientation[j]*v[j]-BigM*(S[j]-1)
+    )
+
+    @constraint(actualTest, orientationConLower,
+    g[1]-sum(q)+d[1]<=0
+    )
+
+    @constraint(actualTest, orientationConUpper,
+    g[2]-sum(r)+d[2]>=0
+    )
+
+
+
+    TT = stdout # save original STDOUT stream
+    redirect_stdout()
+
+    optimize!(actualTest)
+
+    redirect_stdout(TT)
+
+    if termination_status(actualTest) == MOI.OPTIMAL
+        return objective_value(actualTest), value.(x), value.(v)
+        #return objective_value(actualTest)
+    else
+        return NaN, ones(m,1)*NaN, ones(m,1)*NaN
+        #NaN
+    end
+end
+
+uRange = 0.9:0.1:1.9
+n,m = size(A)
+uIterator = Iterators.product(fill(uRange, 1,m)...)
+objVal = zeros(prod(size(uIterator)))
+xVal = zeros(prod(size(uIterator)),m)
+vVal = zeros(prod(size(uIterator)),m)
+uComb = zeros(prod(size(uIterator)),m)
+@showprogress for (index, value) in enumerate(uIterator)
+    objVal[index], xVal[index,:], vVal[index,:] =myMethod(A,b,c,minV,maxV,orientation,collect(value))
+    uComb[index,:]=collect(value)
+end
+
+objValCompact = objVal[(!isnan).(objVal)]
+xValCompact = xVal[(!isnan).(objVal),:]
+vValCompact = vVal[(!isnan).(objVal),:]
+uCombCompact = uComb[(!isnan).(objVal),:]
+
+function points2Hyper(points)
+    #assuming each row is a set of points
+    a,b =size(points)
+    multipliers = zeros(a,1)
+    offset = points[a,:]
+    points = points .- points[a,:]'
+    for i = 1:a
+        multipliers[i] = det(points[1:(a-1),1:end .!=i])
+    end
+    return multipliers, offset
+end
+
+function constraintHelper(i,j,m,u,v)
+    TransMatrix = ((u .* v)' .+I(3).*u)
+    points = zeros(m,m)
+    for k = 1:m
+        transformedVector=(1/2)*(-ones(m,1)).^i
+        if k!=j
+            transformedVector[k]*=(-1)
+        end
+        points[k,:]=TransMatrix*transformedVector
+    end
+    multipliers, offset = points2Hyper(points)
+
+    if  multipliers[:,1]'*(0 .-offset)*(-1)^(i) >= 0 #fix orientation
+        multipliers *= -1
+    end
+
+    return multipliers, offset
+end
+
+function intSol(c,u,v,m,initPoint)
+    #initPoint = initPoint-floor.(initPoint)
+    actualTest = Model(CPLEX.Optimizer)
+    @variable(actualTest, x[1:m], Int)
+
+    @objective(actualTest, Max, sum(c'*x))
+
+    for j = 1:m
+        multipliers, offset = constraintHelper(1,j,m,u,v)
+        @constraint(actualTest, multipliers[:,1]'*(x-initPoint-offset) >=0)
+
+        multipliers, offset = constraintHelper(2,j,m,u,v);
+        @constraint(actualTest, multipliers[:,1]'*(x-initPoint-offset) <=0)
+    end
+
+    TT = stdout # save original STDOUT stream
+    redirect_stdout()
+
+    optimize!(actualTest)
+
+    redirect_stdout(TT)
+
+    return value.(x), objective_value(actualTest)
+end
+
+
+
+#return value.(x), 2*(value.(u) .-1/2)
+#xAnswer = value.(x)
+#uAnswer = value.(u)
+
+#Iterators.product(1:3,fill(0:1,(1,3))...)
