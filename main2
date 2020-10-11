@@ -5,7 +5,7 @@ using JuMP, CPLEX, LinearAlgebra, Plots, ProgressMeter
 A = [ -3 2 4 ; 3 1 -1; 1 -2 9; -1 0 0; 0 -1 0; 0 0 -1]
 b = [9 ; 8 ; 10; 0; 0; 0]
 
-c = [10 ; -20; 30]
+c = [1 ; -2; 3]
 #Asum = sum(A,dims=2) #row sum
 #Asigns = sign.(A) #
 
