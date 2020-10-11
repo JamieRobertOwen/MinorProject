@@ -204,7 +204,7 @@ function myMethod(A,b,c,minV,maxV,orientation,u)
     end
 end
 
-uRange = 0.9:0.1:1.9
+uRange = 0.9:0.1:1.1
 n,m = size(A)
 uIterator = Iterators.product(fill(uRange, 1,m)...)
 objVal = zeros(prod(size(uIterator)))
@@ -277,8 +277,12 @@ function intSol(c,u,v,m,initPoint)
     return value.(x), objective_value(actualTest)
 end
 
+trueObjVal= zeros(size(objValCompact))
+trueXVal = zeros(size(xValCompact))
 
-
+@showprogress for i = 1:size(xValCompact,1)
+    trueXVal[i,:], trueObjVal[i] = intSol(c,uCombCompact[i,:],vValCompact[i,:],m,xValCompact[i,:])
+end
 #return value.(x), 2*(value.(u) .-1/2)
 #xAnswer = value.(x)
 #uAnswer = value.(u)
