@@ -12,8 +12,7 @@ Asigns = sign.(A)
 
 function simple()
     simpleExample = Model(CPLEX.Optimizer)
-    @variable(simpleExample, x[1:3] >=0)
-
+    @variable(simpleExample, x[1:3] ,Int)
     @objective(simpleExample, Max, c' * x)
 
     @constraint(simpleExample, mainConstraint, A * x .<= b)
