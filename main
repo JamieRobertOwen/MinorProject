@@ -57,7 +57,7 @@ function lazyUnit(size,i)
     return foo
 end
 
-lambdaRange = 0.1:0.1:4
+lambdaRange = 0.1:0.1:1.4
 
 optimalValues=zeros(length(lambdaRange))
 
