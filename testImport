@@ -28,9 +28,13 @@ ALower = BitArray(undef,size(qps.arows))
 for i = 1:size(qps.arows,1) #iterate over the rows
     if ARowRepeatsUpper[qps.arows[i]] == 0 #check if for this row the constraint exists
         AUpper[i] = 1
+    else
+        AUpper[i] = 0
     end
     if ARowRepeatsLower[qps.arows[i]] == 0
         ALower[i] = 1
+    else
+        ALower[i] = 0
     end
 
      #shiftedRowUpper[i] = AUpperReplacementIndex[qps.arows[i]]
