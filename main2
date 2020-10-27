@@ -97,9 +97,9 @@ function myMethod(A,b,c,minV,maxV,orientation,u)
 
     @variable(myMethodModel, r[1:m] >=0)
 
-    #@objective(myMethodModel, Max, c'*x)
+    @objective(myMethodModel, Max, c'*x)
 
-    @objective(myMethodModel, Max, c'*x-(1/2)*c'*((u .* v)' .+I(m).*u)*sign.(c))
+    #@objective(myMethodModel, Max, c'*x-(1/2)*c'*((u .* v)' .+I(m).*u)*sign.(c))
 
     #@objective(myMethodModel, Max, c'*x+(1/2)*c'*((u .* v)' .+I(m).*u)*sign.(c))
 
@@ -177,7 +177,7 @@ function myMethod(A,b,c,minV,maxV,orientation,u)
     end
 end
 
-uRange = 0.2:0.1:1.8
+uRange = 0.5:0.1:1.5
 n,m = size(A)
 uIterator = Iterators.product(fill(uRange, 1,m)...)
 objVal = zeros(prod(size(uIterator)))
@@ -199,25 +199,54 @@ uCombCompact = uComb[(!isnan).(objVal),:]
 #trueObjVal = vec(sum(c'.*trueXVal,dims=2))
 
 function intFinder(c,initX,u,v,m)
-    tranMatrix = ((u .* v)' .+I(m).*u)
-    normMatrix = inv(tranMatrix')
+    #tranMatrix = ((u .* v)' .+I(m).*u)
+    normMatrix = inv((u .* v)' .+I(m).*u)
 
-
+    #xLow = floor.(initX)
 
     intFinderModel = Model(CPLEX.Optimizer)
+    #@variable(intFinderModel, x[1:m], Int)
     @variable(intFinderModel, x[1:m], Int)
+
+    #set_start_value.(x, round.(initX))
 
     @objective(intFinderModel, Max, c'*x)
 
-    @constraint(intFinderModel, LowerCon[i=1:m],
-        #(normMatrix*I(m)[:,i])'*(x.-(initX.-1/2))>=0
-        (normMatrix*I(m)[:,i])'*(x.-initX+tranMatrix*ones(m).*1/2)>=0
-    )
+    #@constraint(intFinderModel, LowerCon[i=1:m],
+        #verified
+        #(normMatrix'*I(m)[:,i])'*(x-initX+tranMatrix*ones(m).*1/2)>=0
+        #normMatrix[i,:]'*(x-initX)>=-normMatrix[i,:]'*tranMatrix*ones(m).*1/2
 
-    @constraint(intFinderModel, UpperCon[i=1:m],
-        #(normMatrix*I(m)[:,i])'*(x.-(initX.+1/2))<=0
-        (normMatrix*I(m)[:,i])'*(x-initX-tranMatrix*ones(m).*1/2)<=0
-    )
+        #normMatrix[i,:]'*x>=-normMatrix[i,:]'*tranMatrix*ones(m).*1/2 +normMatrix[i,:]'*initX
+
+
+        #normMatrix*x>=-ones(m).*1/2 + normMatrix*initX
+
+
+
+    #)
+
+    #@constraint(intFinderModel, UpperCon[i=1:m],
+        #(normMatrix'*I(m)[:,i])'*(x-initX-tranMatrix*ones(m).*1/2)<=0
+        #normMatrix[i,:]'*(x-initX)<=normMatrix[i,:]'*tranMatrix*ones(m).*1/2
+
+        #normMatrix[i,:]'*x<=normMatrix[i,:]'*tranMatrix*ones(m).*1/2 +normMatrix[i,:]'*initX
+
+        #normMatrix*x<=ones(m).*1/2 + normMatrix*initX
+
+    #)
+
+    @constraint(intFinderModel, LowerCon,normMatrix*x.>=-ones(m).*1/2 + normMatrix*initX)
+    #x.>=(-1/2)*tranMatrix*ones(m)+initX-floor.(initX)
+
+
+    #@constraint(intFinderModel, MinVal,c'*x>=c'*round.(initX))
+
+    @constraint(intFinderModel, UpperCon,normMatrix*x.<=ones(m).*1/2 + normMatrix*initX)
+
+
+
+    #x.<=(1/2)*tranMatrix*ones(m)+initX-floor.(initX)
 
     TT = stdout # save original STDOUT stream
     redirect_stdout()
@@ -227,6 +256,7 @@ function intFinder(c,initX,u,v,m)
     redirect_stdout(TT)
 
     if termination_status(intFinderModel) == MOI.OPTIMAL
+        #return objective_value(intFinderModel)+c'*floor.(initX), value.(x)+floor.(initX)
         return objective_value(intFinderModel), value.(x)
     else
         return NaN, ones(m)*NaN
@@ -239,6 +269,7 @@ trueXVal = zeros(size(objValCompact,1),m)
 
 @showprogress for i =1:size(objValCompact,1)
     trueObjVal[i], trueXVal[i,:]= intFinder(c,xValCompact[i,:],uCombCompact[i,:],vValCompact[i,:],m)
+
 end
 
 function ActualSol(A,b,c)
