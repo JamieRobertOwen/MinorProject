@@ -325,7 +325,7 @@ end
 
 function ActualSol(A,b,c)
     actualModel = Model(CPLEX.Optimizer)
-    @variable(actualModel, x[1:m], Int)
+    @variable(actualModel, x[1:size(A,2)], Int)
     @objective(actualModel, Max, c'*x)
     @constraint(actualModel,generic, A*x.<=b)
     optimize!(actualModel)
