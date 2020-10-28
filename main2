@@ -97,27 +97,76 @@ function myMethod(A,b,c,minV,maxV,orientation,u)
 
     @variable(myMethodModel, r[1:m] >=0)
 
+    @variable(myMethodModel, Q )
+
+    @variable(myMethodModel, R)
+
+    @variable(myMethodModel, V)
+
     @objective(myMethodModel, Max, c'*x)
+
 
     #@objective(myMethodModel, Max, c'*x-(1/2)*c'*((u .* v)' .+I(m).*u)*sign.(c))
 
     #@objective(myMethodModel, Max, c'*x+(1/2)*c'*((u .* v)' .+I(m).*u)*sign.(c))
 
-    @constraint(myMethodModel, vMin,
-        1+sum(v)>=0
+    #@constraint(myMethodModel, vMin,
+    #    sum(v)>=-1
+    #)
+
+    @constraint(myMethodModel, vSumUp,
+        V >= sum(v)+1
     )
+
+    @constraint(myMethodModel, vSumDown,
+        V <= sum(v)+1
+    )
+
 
     @constraint(myMethodModel, MainCon[i=1:n],
-        A[i,:]'*x+(1/2)*A[i,:]'*((u .* v)' .+I(3).*u)*sign.(A[i,:]) <= b[i]
+        #A[i,:]'*x.+(1/2)*A[i,:]'*((u .* v)' .+I(m).*u)*sign.(A[i,:]) <= b[i]
+
+        #A[i,:]'*x.+(1/2)*A[i,:]'*(u .* v)'*sign.(A[i,:]) <= b[i] -(1/2)*A[i,:]'*(I(m).*u)*sign.(A[i,:])
+
+        #A[i,:]'*x.+(1/2)*A[i,:]'*fill((u .* v)'*sign.(A[i,:]),m) <= b[i] -(1/2)*A[i,:]'*(I(m).*u)*sign.(A[i,:])
+
+        A[i,:]'*x +  (u.*v)'*abs.(A[i,:])*(1/2) <= b[i] -u'*abs.(A[i,:])*(1/2)
     )
+
+    #@showprogress for i=1:n
+        #A[i,:]'*x.+(1/2)*A[i,:]'*fill((u .* v)'*sign.(A[i,:]),m)
+        #b[i] -(1/2)*A[i,:]'*(I(m).*u)*sign.(A[i,:])
+
+        #A[i,:]'*(x+fill((1/2)*(u .* v)'*sign.(A[i,:]),m))
+        #b[i] -(1/2)*A[i,:]'*(I(m).*u)*sign.(A[i,:])
+        #b[i] -(1/2)*(A[i,:].*u)'*sign.(A[i,:])
+
+
+    #    b[i] -u'*abs.(A[i,:])*(1/2)
+        #A[i,:]'*(x.+(1/2)*(u .* v)'*sign.(A[i,:]))
+
+
+    #    A[i,:]'*x +  (u.*v)'*abs.(A[i,:])*(1/2)
+    #end
+
+
+
 
     @constraint(myMethodModel, vBoundsUpper[j=1:m],
-        v[j]<=maxV[j]
+        v[j]<=0
     )
 
+    for j=1:m
+        set_normalized_rhs(vBoundsUpper[j], maxV[j])
+    end
+
     @constraint(myMethodModel, vBoundsLower[j=1:m],
-        v[j]>=minV[j]
+        -v[j]<=0
     )
+
+    for j=1:m
+        set_normalized_rhs(vBoundsLower[j], -minV[j])
+    end
 
     @constraint(myMethodModel, qBound[j=1:m],
         q[j] <= orientation[j]*v[j]
@@ -127,37 +176,39 @@ function myMethod(A,b,c,minV,maxV,orientation,u)
         r[j] >= orientation[j]*v[j]
     )
 
-    @constraint(myMethodModel, orientation11Pos[j=1:m],
-    sum(q[i] for i =1:m if i!=j)+orientation[j]*v[j]-orientation[j]*(1+sum(v))<=u[j]*(1+sum(v))
+    @constraint(myMethodModel, qSumUp,
+        Q >= sum(q)
     )
 
-    @constraint(myMethodModel, orientation11Neg[j=1:m],
-    sum(q[i] for i =1:m if i!=j)+orientation[j]*v[j]-orientation[j]*(1+sum(v))>=-u[j]*(1+sum(v))
+    @constraint(myMethodModel, qSumDown,
+        Q <= sum(q)
     )
 
-    @constraint(myMethodModel, orientation12Pos[j=1:m],
-    sum(r[i] for i =1:m if i!=j)+orientation[j]*v[j]-orientation[j]*(1+sum(v))<=u[j]*(1+sum(v))
+
+    @constraint(myMethodModel, rSumUp,
+        R >= sum(r)
     )
 
-    @constraint(myMethodModel, orientation12Neg[j=1:m],
-    sum(r[i] for i =1:m if i!=j)+orientation[j]*v[j]-orientation[j]*(1+sum(v))>=-u[j]*(1+sum(v))
+    @constraint(myMethodModel, rSumDown,
+        R <= sum(r)
     )
 
-    @constraint(myMethodModel, orientation21Pos[j=1:m],
-    sum(q[i] for i =1:m if i!=j)<=u[j]*(1+sum(v))
+
+    @constraint(myMethodModel, orientation11[j=1:m],
+    Q-q[j]+orientation[j]*(v[j]-V)>=-u[j]*V
     )
 
-    @constraint(myMethodModel, orientation21Neg[j=1:m],
-    sum(q[i] for i =1:m if i!=j)>=-u[j]*(1+sum(v))
+    @constraint(myMethodModel, orientation12[j=1:m],
+    R-r[j]+orientation[j]*(v[j]-V)<=u[j]*V
+    )
+    @constraint(myMethodModel, orientation21[j=1:m],
+    Q-q[j]>=-u[j]*V
     )
 
-    @constraint(myMethodModel, orientation22Pos[j=1:m],
-    sum(r[i] for i =1:m if i!=j)<=u[j]*(1+sum(v))
+    @constraint(myMethodModel, orientation22[j=1:m],
+    R-r[j]<=u[j]*V
     )
 
-    @constraint(myMethodModel, orientation22Neg[j=1:m],
-    sum(r[i] for i =1:m if i!=j)>=-u[j]*(1+sum(v))
-    )
 
 
 

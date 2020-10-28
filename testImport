@@ -6,57 +6,54 @@ using  QPSReader, SparseArrays
 
 #only have integer constraints currently
 function importData(fileName)
+    qps = readqps(fileName)
+    c= qps.c #grab c as explicit
+
+    ARowRepeatsLower = (qps.lcon .== -Inf) #as each constraint can have positive or negative bound
+    ARowRepeatsUpper =  (qps.ucon .== Inf)
+
+    ALowerReplacementIndex = collect(1:qps.ncon)-cumsum(ARowRepeatsLower) #calculates replacement index
+    AUpperReplacementIndex = collect(1:qps.ncon)-cumsum(ARowRepeatsUpper)
+
+    AUpper = BitArray(undef,size(qps.arows)) #will indicate if the constraint is valid
+    ALower = BitArray(undef,size(qps.arows))
+
+    shiftedRowUpper = zeros(Int64,size(qps.arows))
+    shiftedRowLower = zeros(Int64,size(qps.arows))
+
+    for i = 1:size(qps.arows,1) #iterate over the rows
+        if ARowRepeatsUpper[qps.arows[i]] == 0 #check if for this row the constraint exists
+            AUpper[i] = 1
+        else
+            AUpper[i] = 0
+        end
+        if ARowRepeatsLower[qps.arows[i]] == 0
+            ALower[i] = 1
+        else
+            ALower[i] = 0
+        end
+
+         shiftedRowUpper[i] = AUpperReplacementIndex[qps.arows[i]]
+         shiftedRowLower[i] = ALowerReplacementIndex[qps.arows[i]]
+    end
+
+
+    A1 = sparse(shiftedRowUpper[AUpper],qps.acols[AUpper],qps.avals[AUpper])
+    A2 = sparse(shiftedRowLower[ALower],qps.acols[ALower],-qps.avals[ALower])
+    A3 = sparse(collect(1:qps.nvar)[qps.uvar .!= Inf],
+    collect(1:qps.nvar)[qps.uvar .!= Inf],
+    ones(qps.nvar)[qps.uvar .!= Inf])
+
+    A4 = sparse(collect(1:qps.nvar)[qps.lvar .!= -Inf],
+    collect(1:qps.nvar)[qps.lvar .!= -Inf],
+    -ones(qps.nvar)[qps.lvar .!= -Inf])
+
+
+    A = vcat(A1,A2,A3,A4)
+
+    b = [qps.ucon[qps.ucon .!= Inf] ; -qps.lcon[qps.lcon .!= -Inf] ; qps.uvar[qps.uvar .!= Inf]; qps.lvar[qps.lvar .!= -Inf]]
+
     return A,b,c
 end
 
-
-qps = readqps("neos-3083819-nubu.mps")
-c= qps.c #grab c as explicit
-
-ARowRepeatsLower = (qps.lcon .== -Inf) #as each constraint can have positive or negative bound
-ARowRepeatsUpper =  (qps.ucon .== Inf)
-
-#ALowerReplacementIndex = collect(1:qps.ncon)-cumsum(ARowRepeatsLower) #calculates replacement index
-#AUpperReplacementIndex = collect(1:qps.ncon)-cumsum(ARowRepeatsUpper)
-
-AUpper = BitArray(undef,size(qps.arows)) #will indicate if the constraint is valid
-ALower = BitArray(undef,size(qps.arows))
-
-#shiftedRowUpper = zeros(Int64,size(qps.arows))
-#shiftedRowLower = zeros(Int64,size(qps.arows))
-
-for i = 1:size(qps.arows,1) #iterate over the rows
-    if ARowRepeatsUpper[qps.arows[i]] == 0 #check if for this row the constraint exists
-        AUpper[i] = 1
-    else
-        AUpper[i] = 0
-    end
-    if ARowRepeatsLower[qps.arows[i]] == 0
-        ALower[i] = 1
-    else
-        ALower[i] = 0
-    end
-
-     #shiftedRowUpper[i] = AUpperReplacementIndex[qps.arows[i]]
-     #shiftedRowLower[i] = ALowerReplacementIndex[qps.arows[i]]
-end
-
-
-A1 = sparse(qps.arows[AUpper],qps.acols[AUpper],qps.avals[AUpper])
-A2 = sparse(qps.arows[ALower],qps.acols[ALower],-qps.avals[ALower])
-A3 = sparse(collect(1:qps.nvar)[qps.uvar .!= Inf],
-collect(1:qps.nvar)[qps.uvar .!= Inf],
-ones(qps.nvar)[qps.uvar .!= Inf])
-
-A4 = sparse(collect(1:qps.nvar)[qps.lvar .!= -Inf],
-collect(1:qps.nvar)[qps.lvar .!= -Inf],
--ones(qps.nvar)[qps.lvar .!= -Inf])
-
-
-A = vcat(A1,A2,A3,A4)
-
-#A = sparse([qps.arows[AUpper] ; 1*qps.ncon.+qps.arows[ALower] ; 2*qps.ncon.+collect(1:qps.nvar)[qps.uvar .!= Inf] ; 3*qps.ncon.+collect(1:qps.nvar)[qps.lvar .!= -Inf]],
- #[qps.acols[AUpper] ; qps.acols[ALower] ; collect(1:qps.nvar)[qps.uvar .!= Inf] ; collect(1:qps.nvar)[qps.lvar .!= -Inf]],
- #[qps.avals[AUpper] ; -qps.avals[ALower] ; ones(qps.nvar) ; -ones(qps.nvar)])
-
-b = [qps.ucon[qps.ucon .!= Inf] ; -qps.lcon[qps.lcon .!= -Inf] ; qps.uvar[qps.uvar .!= Inf]; qps.lvar[qps.lvar .!= -Inf]]
+A,b,c=importData("neos-3083819-nubu.mps")
