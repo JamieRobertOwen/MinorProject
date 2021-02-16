@@ -56,4 +56,4 @@ function importData(fileName)
     return A,b,c
 end
 
-A,b,c=importData("neos-3083819-nubu.mps")
+A,b,c=importData("haprp.mps")

@@ -3,9 +3,13 @@ using JuMP, CPLEX, LinearAlgebra, ProgressMeter
 #example problem
 
 A = [ -3 2 4 ; 3 1 -1; 1 -2 9; -1 0 0; 0 -1 0; 0 0 -1]
-b = [9 ; 8 ; 20; 0; 0; 0]
+b = [9 ; 8 ; 2; 0; 0; 0]
 
 c = [1 ; -2; 3]
+
+
+
+
 #Asum = sum(A,dims=2) #row sum
 #Asigns = sign.(A) #
 
@@ -69,7 +73,9 @@ function orientationMIP(A,b,c)
 
     @objective(orientationModel, Max, c' * x)
 
-    @constraint(orientationModel, mainConstraint, A * (x.-(1/2)+u) .<= b)
+    @constraint(orientationModel, mainConstraint1, A * (x+u.-(1/2)) .<= b)
+
+    @constraint(orientationModel, mainConstraint2, A * (x-u.+(1/2)) .<= b)
 
     TT = stdout # save original STDOUT stream
     redirect_stdout()
@@ -215,31 +221,55 @@ function myMethod(A,b,c,minV,maxV,orientation,u)
     TT = stdout # save original STDOUT stream
     redirect_stdout()
 
-    optimize!(myMethodModel)
+
+
+    foo = @time begin
+        optimize!(myMethodModel)
+
 
     redirect_stdout(TT)
 
     if termination_status(myMethodModel) == MOI.OPTIMAL
-        return objective_value(myMethodModel), value.(x), value.(v)
+        return objective_value(myMethodModel), value.(x), value.(v) foo
         #return objective_value(actualTest)
     else
-        return NaN, ones(m)*NaN, ones(m)*NaN
+        return NaN, ones(m)*NaN, ones(m)*NaN foo
         #NaN
     end
 end
 
-uRange = 0.5:0.1:1.5
+#uRange = 1:0.1:1.1
 n,m = size(A)
-uIterator = Iterators.product(fill(uRange, 1,m)...)
-objVal = zeros(prod(size(uIterator)))
-xVal = zeros(prod(size(uIterator)),m)
-vVal = zeros(prod(size(uIterator)),m)
-uComb = zeros(prod(size(uIterator)),m)
+#uIterator = Iterators.product(fill(uRange, 1,m)...)
 
-@showprogress for (index, value) in enumerate(uIterator)
-    objVal[index], xVal[index,:], vVal[index,:] =myMethod(A,b,c,minV,maxV,orientation,collect(value))
-    uComb[index,:]=collect(value)
+
+#objVal = zeros(prod(size(uIterator)))
+#xVal = zeros(prod(size(uIterator)),m)
+#vVal = zeros(prod(size(uIterator)),m)
+#uComb = zeros(prod(size(uIterator)),m)
+
+
+
+#@showprogress for (index, value) in enumerate(uIterator)
+#    objVal[index], xVal[index,:], vVal[index,:] =myMethod(A,b,c,minV,maxV,orientation,collect(value))
+#    uComb[index,:]=collect(value)
+#end
+
+numReps = 3000
+
+objVal = zeros(numReps)
+xVal = zeros(numReps,m)
+vVal = zeros(numReps,m)
+uComb = zeros(numReps,m)
+foo = zeros(numReps,m)
+
+
+@showprogress for i = 1:numReps
+    u = rand(m) .+0.5
+    objVal[i], xVal[i,:], vVal[i,:], foo[i,:] =myMethod(A,b,c,minV,maxV,orientation,u)
+    uComb[i,:]=u
 end
+
 
 objValCompact = objVal[(!isnan).(objVal)]
 xValCompact = xVal[(!isnan).(objVal),:]
