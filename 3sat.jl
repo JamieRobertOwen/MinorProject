@@ -1,4 +1,4 @@
-using JuMP, CPLEX, LinearAlgebra, ProgressMeter, Ipopt
+using JuMP, CPLEX, LinearAlgebra, Ipopt
 
 #example problem
 
@@ -8,10 +8,10 @@ using JuMP, CPLEX, LinearAlgebra, ProgressMeter, Ipopt
 #c = [1 ; -2; 3]
 n,m = size(A)
 b=zeros(n)
-for i = 1:m
+for i = 1:n
     b[i] = -1+sum(A[i,:].>0)
 end
-alpha = 0.1
+alpha = 0.01
 b = b .+ (1 - alpha)
 
 
@@ -72,7 +72,7 @@ function orientationMIP(A,b,c)
     n,m = size(A)
     orientationModel = Model(CPLEX.Optimizer)
 
-    @variable(orientationModel, x[1:m] )
+    @variable(orientationModel, 0 <= x[1:m] <= 1)
 
     @variable(orientationModel, u[1:m], Bin)
 
@@ -101,7 +101,7 @@ function myMethodUV(A,b,c,orientation,minV,maxV)
     #signCombs = unique(sign.(A), dims =2)
     #NosignCombs = size(signCombs,1)
     myMethodModel = Model(Ipopt.Optimizer)
-    @variable(myMethodModel, x[1:m])
+    @variable(myMethodModel, 0<= x[1:m] <= 1)
 
     @variable(myMethodModel, u[1:m] >=0)
 
@@ -232,7 +232,7 @@ function intFinder(c,initX,u,v)
 
     intFinderModel = Model(CPLEX.Optimizer)
 
-    @variable(intFinderModel, x[1:m], Int)
+    @variable(intFinderModel, x[1:m], Bin)
 
     @variable(intFinderModel, s[1:m] >=0)
 

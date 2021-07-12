@@ -32,4 +32,6 @@ for line in eachline(file)
 end
 close(file)
 
-A = transpose(sparse(colInfo,rowInfo,dataInfo))
+#A = transpose(sparse(colInfo,rowInfo,dataInfo))
+
+A = Matrix(transpose(sparse(colInfo,rowInfo,dataInfo)))
